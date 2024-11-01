@@ -8,6 +8,7 @@ use serde::Serialize;
 
 use crate::civilization::LocationInfo;
 use crate::exploration::calculate_estimated_worth;
+use crate::logs::load_game_event::LoadGameEventGameMode;
 use crate::logs::rank_event::RankEvent;
 use crate::logs::reputation_event::ReputationEvent;
 use crate::logs::scan_event::ScanEvent;
@@ -28,6 +29,7 @@ pub mod current_organic_progress;
 /// does.
 #[derive(Serialize, Default)]
 pub struct LogStateResolver {
+    pub game_mode: Option<LoadGameEventGameMode>,
     pub systems: HashMap<u64, SystemState>,
     pub current_system: Option<u64>,
     pub current_organic_progress: Option<CurrentOrganicProgress>,
@@ -163,9 +165,14 @@ impl StateResolver<LogEvent> for LogStateResolver {
                     None => return FeedResult::Later,
                 }
             }
-            // Should be unreachable because this is already handled in GameCommanderEntry, however we dont want to
-            // panic via unreachable!() here, just in case..
-            LogEventContent::LoadGame(_) => {}
+            LogEventContent::LoadGame(load_game_event) => {
+                self.game_mode = load_game_event.game_mode.clone();
+            }
+            LogEventContent::Music(music_event) if music_event.music_track == "MainMenu" => {
+                // Player exited to games' main menu. TODO: Is this check sufficient or is there a better way?
+                self.game_mode = None;
+            }
+            LogEventContent::Shutdown => self.game_mode = None,
             _ => {}
         }
 
