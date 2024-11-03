@@ -2,6 +2,7 @@ pub use models::blueprint::Blueprint;
 pub use models::blueprint_modifier::BlueprintModifier;
 pub use models::fighter_loadout::FighterLoadout;
 pub use models::fighter_type::FighterType;
+pub use models::ship_info::ShipInfo;
 pub use models::ship_module::module_class::ModuleClass;
 pub use models::ship_module::module_class::ModuleClassError;
 pub use models::ship_module::ship_cockpit_module::ShipCockpitModule;

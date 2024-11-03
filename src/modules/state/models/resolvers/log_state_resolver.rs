@@ -15,6 +15,7 @@ use crate::logs::scan_event::ScanEvent;
 use crate::logs::scan_organic_event::ScanOrganicEventScanType;
 use crate::logs::statistics_event::StatisticsEvent;
 use crate::logs::{LogEvent, LogEventContent};
+use crate::ship::ShipInfo;
 use crate::state::models::feed_result::FeedResult;
 use crate::state::models::state::carrier_state::CarrierState;
 use crate::state::models::state::materials_state::MaterialsState;
@@ -31,9 +32,11 @@ pub mod current_organic_progress;
 pub struct LogStateResolver {
     pub game_mode: Option<LoadGameEventGameMode>,
     pub systems: HashMap<u64, SystemState>,
+    pub ships: HashMap<u64, ShipInfo>,
     pub current_system: Option<u64>,
     pub current_organic_progress: Option<CurrentOrganicProgress>,
     pub current_exploration_data: Vec<ScanEvent>,
+    pub current_ship_id: Option<u64>,
     pub material_state: MaterialsState,
     pub mission_state: MissionState,
     pub carrier_state: Option<CarrierState>,
@@ -83,6 +86,10 @@ impl StateResolver<LogEvent> for LogStateResolver {
 
                 let system = self.upset_system(&fsd_jump.system_info);
                 system.visit(&input.timestamp);
+
+                if let Some(ship) = self.current_ship_mut() {
+                    ship.fuel_level = Some(fsd_jump.fuel_level);
+                }
             }
             LogEventContent::ScanOrganic(scan_organic) => match &scan_organic.scan_type {
                 ScanOrganicEventScanType::Log => {
@@ -167,6 +174,64 @@ impl StateResolver<LogEvent> for LogStateResolver {
             }
             LogEventContent::LoadGame(load_game_event) => {
                 self.game_mode = load_game_event.game_mode.clone();
+
+                if let Some(ship_info) = &load_game_event.ship_info {
+                    self.current_ship_id = Some(ship_info.ship_id);
+
+                    if let Some(ship) = self.current_ship_mut() {
+                        ship.fuel_level = Some(ship_info.fuel_level);
+                        ship.fuel_capacity = Some(ship_info.fuel_capacity);
+                    }
+                }
+            }
+            LogEventContent::Loadout(loadout_event) => {
+                let new_ship = ShipInfo::from(loadout_event.clone());
+
+                self.ships
+                    .entry(new_ship.id)
+                    .and_modify(|ship| {
+                        ship.fuel_level.or(new_ship.fuel_level);
+                        ship.fuel_capacity.or(new_ship.fuel_capacity);
+                    })
+                    .or_insert(new_ship);
+            }
+            LogEventContent::SetUserShipName(ship_name_event) => {
+                if let Some(ship) = self.ships.get_mut(&ship_name_event.ship_id) {
+                    ship.name = ship_name_event.user_ship_name.clone();
+                    ship.ident = ship_name_event.user_ship_id.clone();
+                }
+            }
+            LogEventContent::StoredShips(stored_ships_event) => {
+                for stored_ship in &stored_ships_event.ships_here {
+                    if let Some(ship) = self.ships.get_mut(&stored_ship.ship_id) {
+                        ship.update_location(
+                            stored_ships_event.star_system.clone(),
+                            stored_ships_event.market_id,
+                        );
+                    }
+                }
+
+                for stored_ship in &stored_ships_event.ships_remote {
+                    if let Some(location) = &stored_ship.storage_location {
+                        if let Some(ship) = self.ships.get_mut(&stored_ship.ship_id) {
+                            ship.update_location(
+                                location.star_system.clone(),
+                                location.ship_market_id,
+                            );
+                            ship.value = stored_ship.value;
+                        }
+                    }
+                }
+            }
+            LogEventContent::FuelScoop(fuel_scoop_event) => {
+                if let Some(ship) = self.current_ship_mut() {
+                    ship.fuel_level = Some(fuel_scoop_event.total);
+                }
+            }
+            LogEventContent::ReservoirReplenished(reservoir_replenished) => {
+                if let Some(ship) = self.current_ship_mut() {
+                    ship.fuel_level = Some(reservoir_replenished.fuel_main);
+                }
             }
             LogEventContent::Music(music_event) if music_event.music_track == "MainMenu" => {
                 // Player exited to games' main menu. TODO: Is this check sufficient or is there a better way?
@@ -212,6 +277,14 @@ impl LogStateResolver {
         self.systems
             .get_mut(&location_info.system_address)
             .expect("Should have been added")
+    }
+
+    pub fn current_ship(&self) -> Option<&ShipInfo> {
+        self.current_ship_id.and_then(|id| self.ships.get(&id))
+    }
+
+    pub fn current_ship_mut(&mut self) -> Option<&mut ShipInfo> {
+        self.current_ship_id.and_then(|id| self.ships.get_mut(&id))
     }
 
     pub fn current_system(&self) -> Option<&SystemState> {

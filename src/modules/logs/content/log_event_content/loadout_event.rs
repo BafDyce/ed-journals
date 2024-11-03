@@ -8,7 +8,7 @@ pub struct LoadoutEvent {
     pub ship: ShipType,
 
     #[serde(rename = "ShipID")]
-    pub ship_id: u32,
+    pub ship_id: u64,
     pub ship_name: String,
     pub ship_ident: String,
     pub modules: Vec<LoadoutModule>,
