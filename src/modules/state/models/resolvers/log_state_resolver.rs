@@ -190,8 +190,15 @@ impl StateResolver<LogEvent> for LogStateResolver {
                 self.ships
                     .entry(new_ship.id)
                     .and_modify(|ship| {
-                        ship.fuel_level.or(new_ship.fuel_level);
-                        ship.fuel_capacity.or(new_ship.fuel_capacity);
+                        let mut new_ship = new_ship.clone();
+                        if let None = &new_ship.fuel_level {
+                            new_ship.fuel_level = ship.fuel_level;
+                        }
+                        if let None = &new_ship.fuel_capacity {
+                            new_ship.fuel_capacity = ship.fuel_capacity;
+                        }
+
+                        *ship = new_ship;
                     })
                     .or_insert(new_ship);
             }

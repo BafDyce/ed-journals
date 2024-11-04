@@ -4,20 +4,21 @@ use crate::logs::loadout_event::{LoadoutEvent, LoadoutModule};
 
 use super::ship_type::ShipType;
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ShipInfo {
     pub ship_type: ShipType,
     pub id: u64,
     pub name: String,
     pub ident: String,
     pub value: u64,
+    pub rebuy_value: u64,
     pub modules: Vec<LoadoutModule>,
     pub fuel_capacity: Option<f32>,
     pub fuel_level: Option<f32>,
     pub location: Option<ShipLocation>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ShipLocation {
     pub system: String,
     pub market_id: u64,
@@ -30,9 +31,10 @@ impl From<LoadoutEvent> for ShipInfo {
             id: loadout.ship_id,
             name: loadout.ship_name,
             ident: loadout.ship_ident,
-            value: 0,
+            value: loadout.hull_value.unwrap_or(0) + loadout.modules_value.unwrap_or(0),
+            rebuy_value: loadout.rebuy,
             modules: loadout.modules,
-            fuel_capacity: None,
+            fuel_capacity: Some(loadout.fuel_capacity.main),
             fuel_level: None,
             location: None,
         }
